@@ -14,6 +14,7 @@ class CustomThemeExtension extends ThemeExtension<CustomThemeExtension> {
   final Color? searchBarColor;
   final Color? tabColor;
   final Color? tabText;
+  final Color? backgroundColor;
 
   const CustomThemeExtension({
     this.circleImageColor,
@@ -27,6 +28,7 @@ class CustomThemeExtension extends ThemeExtension<CustomThemeExtension> {
     this.searchBarColor,
     this.tabColor,
     this.tabText,
+    this.backgroundColor,
   });
 
   static const lightMode = CustomThemeExtension(
@@ -41,6 +43,7 @@ class CustomThemeExtension extends ThemeExtension<CustomThemeExtension> {
     searchBarColor: Coloors.searchLight,
     tabColor: Coloors.tabLight,
     tabText: Colors.white,
+    backgroundColor: Colors.white,
   );
 
   static const darkMode = CustomThemeExtension(
@@ -55,6 +58,7 @@ class CustomThemeExtension extends ThemeExtension<CustomThemeExtension> {
     searchBarColor: Coloors.searchDark,
     tabColor: Coloors.tabDark,
     tabText: Colors.white,
+    backgroundColor: Coloors.backgroundDark,
   );
 
   @override
@@ -70,6 +74,7 @@ class CustomThemeExtension extends ThemeExtension<CustomThemeExtension> {
     Color? searchBarColor,
     Color? tabColor,
     Color? tabText,
+    Color? backgroundColor,
   }) {
     return CustomThemeExtension(
       photoIconBgColor: photoIconBgColor ?? this.photoIconBgColor,
@@ -84,6 +89,7 @@ class CustomThemeExtension extends ThemeExtension<CustomThemeExtension> {
       searchBarColor: searchBarColor ?? this.searchBarColor,
       tabColor: tabColor ?? this.tabColor,
       tabText: tabText ?? this.tabText,
+      backgroundColor: backgroundColor ?? this.backgroundColor,
     );
   }
 
@@ -115,6 +121,7 @@ class CustomThemeExtension extends ThemeExtension<CustomThemeExtension> {
       searchBarColor: Color.lerp(searchBarColor, other.searchBarColor, t),
       tabColor: Color.lerp(tabColor, other.tabColor, t),
       tabText: Color.lerp(tabText, other.tabText, t),
+      backgroundColor: Color.lerp(backgroundColor, other.backgroundColor, t),
     );
   }
 }

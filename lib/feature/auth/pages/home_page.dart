@@ -1,6 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:whatsappnew/common/extension/custom_theme_extension.dart';
 import 'package:whatsappnew/common/utils/coloors.dart';
+import 'package:whatsappnew/common/models/user_model.dart';
+import 'package:whatsappnew/common/services/database_service.dart';
+import 'package:whatsappnew/feature/chat/pages/chat_page.dart';
+import 'package:whatsappnew/feature/calls/pages/calls_page.dart';
+import 'package:whatsappnew/feature/chat/pages/home_chat_page.dart';
+import 'package:whatsappnew/feature/status/pages/status_page.dart';
+import 'package:whatsappnew/feature/auth/pages/community_page.dart';
+import 'package:whatsappnew/feature/auth/pages/settings_page.dart';
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -10,19 +21,211 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
-  late TabController _topTabController;
   late TabController _bottomTabController;
+  final DatabaseService _databaseService = DatabaseService();
+  List<UserModel> users = [];
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _topTabController = TabController(length: 4, vsync: this);
-    _bottomTabController = TabController(length: 5, vsync: this);
+    _bottomTabController = TabController(length: 5, vsync: this, initialIndex: 3);
+    _bottomTabController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      print('🏠 HomePage - Veri yükleme başlıyor...');
+      
+      // Database durumunu kontrol et
+      await _databaseService.checkDatabaseStatus();
+      
+      await _databaseService.initialize();
+      await _loadCurrentUser();
+      await _loadUsers();
+      
+      print('✅ HomePage - Veri yükleme tamamlandı');
+    } catch (e) {
+      print('❌ HomePage - Veri yükleme hatası: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadCurrentUser() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        print('✅ HomePage - Kullanıcı yüklendi: ${user.displayName}');
+      } else {
+        print('⚠️ HomePage - Kullanıcı bulunamadı');
+      }
+    } catch (e) {
+      print('❌ HomePage - Kullanıcı yükleme hatası: $e');
+    }
+  }
+
+  Future<void> _initializeAndLoadUsers() async {
+    try {
+      // DatabaseService'i başlat
+      await _databaseService.initialize();
+      await _loadUsers();
+    } catch (e) {
+      print('DatabaseService başlatma hatası: $e');
+      // Hata durumunda test verilerini kullan
+      setState(() {
+        users = _getFallbackUsers();
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadUsers() async {
+    try {
+      bool isConnected = false;
+      try {
+        isConnected = await _databaseService.testConnection().timeout(
+          const Duration(seconds: 1),
+          onTimeout: () => false,
+        );
+      } catch (e) {
+        print('Database bağlantı testi başarısız: $e');
+        isConnected = false;
+      }
+      
+      if (isConnected) {
+        try {
+          final dbUsers = await _databaseService.getAllUsers().timeout(
+            const Duration(seconds: 3),
+            onTimeout: () => throw TimeoutException('getAllUsers timeout'),
+          );
+          
+          if (mounted) {
+            setState(() {
+              users = dbUsers.isNotEmpty ? dbUsers : _getFallbackUsers();
+              isLoading = false;
+            });
+          }
+        } catch (e) {
+          print('Database kullanıcı yükleme hatası: $e');
+          if (mounted) {
+            setState(() {
+              users = _getFallbackUsers();
+              isLoading = false;
+            });
+          }
+        }
+      } else {
+        print('Database bağlantısı yok - test verileri kullanılıyor');
+        if (mounted) {
+          setState(() {
+            users = _getFallbackUsers();
+            isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('Kullanıcı yükleme hatası: $e');
+      if (mounted) {
+        setState(() {
+          users = _getFallbackUsers();
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  List<UserModel> _getFallbackUsers() {
+    return [];
+  }
+
+  // Test kullanıcılarını sil
+  Future<void> _deleteTestUsers() async {
+    try {
+      await _databaseService.deleteTestUsers();
+      // Kullanıcıları yeniden yükle
+      await _loadUsers();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Test kullanıcıları silindi!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Test kullanıcıları silinirken hata: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // TÜM KULLANICILARI SİL
+  Future<void> _deleteAllUsers() async {
+    try {
+      await _databaseService.deleteAllUsers();
+      // Kullanıcıları yeniden yükle
+      await _loadUsers();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('TÜM KULLANICILAR SİLİNDİ!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Tüm kullanıcıları silinirken hata: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Zeynep kullanıcısını sil
+  Future<void> _deleteZeynepUser() async {
+    try {
+      await _databaseService.deleteZeynepUser();
+      // Kullanıcıları yeniden yükle
+      await _loadUsers();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Zeynep kullanıcısı silindi!'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Zeynep kullanıcısını silinirken hata: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
-    _topTabController.dispose();
     _bottomTabController.dispose();
     super.dispose();
   }
@@ -36,89 +239,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         actions: [
           Row(
             children: [
-              PopupMenuButton<String>(
-                color: context.customTheme.tabColor,
-                icon: Icon(
-                  Icons.more_vert,
-                  color: context.customTheme.greyColor,
-                  size: 22,
-                ),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'select_chat':
-                      print('Sohbet seç');
-                      break;
-                    case 'mark_all_read':
-                      print('Tümü okundu');
-                      break;
-                    case 'new_chat':
-                      print('Yeni sohbet');
-                      break;
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem<String>(
-                    value: 'select_chat',
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline,
-                          color: context.customTheme.greyColor,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Sohbet seç',
-                          style: TextStyle(
-                            color: context.customTheme.greyColor,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: 'mark_all_read',
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.mark_email_read,
-                          color: context.customTheme.greyColor,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Tümü okundu',
-                          style: TextStyle(
-                            color: context.customTheme.greyColor,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: 'new_chat',
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          color: context.customTheme.greyColor,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Yeni sohbet',
-                          style: TextStyle(
-                            color: context.customTheme.greyColor,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
               const SizedBox(width: 15),
               Icon(
                 Icons.camera_alt_outlined,
@@ -139,109 +259,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ),
       ),
-      body: Column(
+      body: IndexedStack(
+        index: _bottomTabController.index,
         children: [
-          // Arama çubuğu
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: context.customTheme.searchBarColor,
-                borderRadius: BorderRadius.circular(25),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.search,
-                    color: context.customTheme.greyColor,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Ara',
-                    style: TextStyle(
-                      color: context.customTheme.greyColor,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Özel tab butonları
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildTabButton(
-                  'Tümü',
-                  0,
-                  selectedColor: context.customTheme.greyColor,
-                  selectedTextStyle: TextStyle(
-                    color: context.customTheme.tabText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  unselectedColor: Colors.transparent,
-                  unselectedTextStyle: TextStyle(
-                    color: context.customTheme.greyColor,
-                  ),
-                ),
-                _buildTabButton(
-                  'Okunmamış',
-                  1,
-                  selectedColor: context.customTheme.greyColor,
-                  selectedTextStyle: TextStyle(
-                    color: context.customTheme.tabText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  unselectedColor: Colors.transparent,
-                  unselectedTextStyle: TextStyle(
-                    color: context.customTheme.greyColor,
-                  ),
-                ),
-                _buildTabButton(
-                  'Favoriler',
-                  2,
-                  selectedColor: context.customTheme.greyColor,
-                  selectedTextStyle: TextStyle(
-                    color: context.customTheme.tabText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  unselectedColor: Colors.transparent,
-                  unselectedTextStyle: TextStyle(
-                    color: context.customTheme.greyColor,
-                  ),
-                ),
-                _buildTabButton(
-                  'Gruplar',
-                  3,
-                  selectedColor: context.customTheme.greyColor,
-                  selectedTextStyle: TextStyle(
-                    color: context.customTheme.tabText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  unselectedColor: Colors.transparent,
-                  unselectedTextStyle: TextStyle(
-                    color: context.customTheme.greyColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Tab içeriği
-          Expanded(
-            child: TabBarView(
-              controller: _topTabController,
-              children: [
-                Center(child: Text('Tümü Tab')),
-                Center(child: Text('Okunmamış Tab')),
-                Center(child: Text('Favoriler Tab')),
-                Center(child: Text('Gruplar Tab')),
-              ],
-            ),
-          ),
+          // Durumlar
+          const StatusPage(),
+          // Aramalar
+          const CallsPage(),
+          // Topluluk
+          const CommunityPage(),
+          // Sohbetler
+          const HomeChatPage(),
+          // Ayarlar
+          const SettingsPage(),
         ],
       ),
       bottomNavigationBar: Container(
@@ -272,51 +302,5 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildTabButton(
-    String text,
-    int tabIndex, {
-    TextStyle? selectedTextStyle,
-    TextStyle? unselectedTextStyle,
-    Color? selectedColor,
-    Color? unselectedColor,
-  }) {
-    final isSelected = _topTabController.index == tabIndex;
-
-    return GestureDetector(
-      onTap: () {
-        _topTabController.animateTo(tabIndex);
-        setState(() {});
-      },
-      child: SizedBox(
-        width: 80, // Genişlik
-        height: 42, // Yükseklik
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? (selectedColor ?? Coloors.greenDark)
-                : (unselectedColor ?? context.customTheme.tabColor),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: isSelected
-                ? (selectedTextStyle ??
-                      TextStyle(
-                        color: context.customTheme.tabText,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                      ))
-                : (unselectedTextStyle ??
-                      TextStyle(
-                        color: context.customTheme.tabText,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                      )),
-          ),
-        ),
-      ),
-    );
-  }
+  // sohbet ana sayfası ayrı sayfaya taşındı (HomeChatPage)
 }

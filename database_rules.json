@@ -1,0 +1,48 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $uid"
+      },
+      ".indexOn": [
+        "name",
+        "phoneNumber"
+      ]
+    },
+    "messages": {
+      "$messageId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+      ".indexOn": [
+        "timestamp",
+        "senderId",
+        "receiverId"
+      ]
+    },
+    "calls": {
+      "$callId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+      ".indexOn": [
+        "timestamp",
+        "callerId",
+        "receiverId"
+      ]
+    },
+    "statuses": {
+      "$statusId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+      ".indexOn": [
+        "timestamp",
+        "userId"
+      ]
+    },
+    ".read": "auth != null",
+    ".write": "auth != null"
+  }
+}
